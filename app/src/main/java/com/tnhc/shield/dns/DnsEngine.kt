@@ -69,7 +69,7 @@ class DnsEngine(
         // Try to extract TTL from first answer record; fallback to 60s
         return try {
             val buf = java.nio.ByteBuffer.wrap(response)
-            val anCount = (buf.position(6).getShort(6).toInt() and 0xFFFF)
+            val anCount = buf.getShort(6).toInt() and 0xFFFF
             if (anCount == 0) return 60
             // Skip header (12 bytes) + question section
             var pos = 12
