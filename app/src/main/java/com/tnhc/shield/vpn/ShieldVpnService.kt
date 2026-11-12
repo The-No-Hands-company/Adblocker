@@ -79,7 +79,7 @@ class ShieldVpnService : VpnService() {
         val output = FileOutputStream(pfd.fileDescriptor)
         val buffer = ByteBuffer.allocate(32_768)
 
-        while (coroutineContext.isActive) {
+        while (currentCoroutineContext().isActive) {
             buffer.clear()
             val length = withContext(Dispatchers.IO) {
                 try { input.read(buffer.array()) } catch (e: Exception) { -1 }
