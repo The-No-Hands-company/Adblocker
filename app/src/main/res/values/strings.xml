@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Shield</string>
+    <string name="app_tagline">Your Digital Immune System</string>
+    <string name="shield_active">Shield Active</string>
+    <string name="shield_inactive">Shield Inactive</string>
+    <string name="tap_to_enable">Tap to enable protection</string>
+    <string name="tap_to_disable">Tap to disable protection</string>
+    <string name="blocked_today">Blocked Today</string>
+    <string name="total_blocked">Total Blocked</string>
+    <string name="active_lists">Active Lists</string>
+    <string name="dns_latency">DNS Latency</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_filters">Filters</string>
+    <string name="nav_apps">Apps</string>
+    <string name="nav_settings">Settings</string>
+    <string name="notification_channel_vpn">Shield VPN</string>
+    <string name="notification_vpn_title">Shield is protecting you</string>
+    <string name="notification_vpn_text">Blocking ads and trackers system-wide</string>
+    <string name="filter_updating">Updating filter lists…</string>
+    <string name="filter_update_complete">Filter lists updated</string>
+    <string name="requests_blocked">requests blocked</string>
+    <string name="ms">ms</string>
+    <string name="shield_by_tnhc">Shield by TNHC</string>
+    <string name="version">Version</string>
+</resources>

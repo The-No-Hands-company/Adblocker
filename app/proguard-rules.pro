@@ -1,0 +1,5 @@
+-keep class com.tnhc.shield.vpn.** { *; }
+-keep class com.tnhc.shield.dns.** { *; }
+-keep class com.tnhc.shield.filter.** { *; }
+-keepclassmembers class * extends androidx.work.Worker { <init>(...); }
+-keepclassmembers class * extends androidx.work.ListenableWorker { <init>(...); }
