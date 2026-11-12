@@ -9,11 +9,13 @@ import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import com.tnhc.shield.MainActivity
 import com.tnhc.shield.R
+import com.tnhc.shield.data.prefs.ShieldPreferences
 import com.tnhc.shield.dns.DnsEngine
 import com.tnhc.shield.dns.DnsPacketParser
 import com.tnhc.shield.dns.IpPacketParser
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.DatagramSocket
@@ -32,8 +34,8 @@ class ShieldVpnService : VpnService() {
         const val CHANNEL_ID = "shield_vpn"
     }
 
-    @Inject
-    lateinit var dnsEngine: DnsEngine
+    @Inject lateinit var dnsEngine: DnsEngine
+    @Inject lateinit var prefs: ShieldPreferences
 
     private var vpnInterface: ParcelFileDescriptor? = null
     private var serviceJob: Job? = null
@@ -57,20 +59,25 @@ class ShieldVpnService : VpnService() {
     }
 
     private fun setupVpn() {
-        try {
-            vpnInterface = Builder()
-                .addAddress(VPN_ADDRESS, 32)
-                .addRoute(VPN_ADDRESS, 32)
-                .addDnsServer(VPN_DNS)
-                .setSession("Shield")
-                .setMtu(1500)
-                .establish()
-
-            vpnInterface?.let { pfd ->
-                serviceJob = serviceScope.launch { runPacketLoop(pfd) }
+        serviceScope.launch {
+            try {
+                val excluded = prefs.excludedApps.first()
+                val builder = Builder()
+                    .addAddress(VPN_ADDRESS, 32)
+                    .addRoute(VPN_ADDRESS, 32)
+                    .addDnsServer(VPN_DNS)
+                    .setSession("Shield")
+                    .setMtu(1500)
+                excluded.forEach { pkg ->
+                    try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
+                }
+                vpnInterface = builder.establish()
+                vpnInterface?.let { pfd ->
+                    serviceJob = launch { runPacketLoop(pfd) }
+                }
+            } catch (e: Exception) {
+                stopSelf()
             }
-        } catch (e: Exception) {
-            stopSelf()
         }
     }
 

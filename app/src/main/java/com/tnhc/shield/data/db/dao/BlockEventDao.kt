@@ -28,8 +28,16 @@ interface BlockEventDao {
     @Query("DELETE FROM block_events WHERE timestamp < :before")
     suspend fun deleteOlderThan(before: Long)
 
+    @Query("""
+        SELECT (timestamp / 3600000) AS hour, COUNT(*) AS count
+        FROM block_events WHERE timestamp > :since
+        GROUP BY hour ORDER BY hour ASC
+    """)
+    fun blocksPerHour(since: Long): Flow<List<HourlyCount>>
+
     @Query("DELETE FROM block_events")
     suspend fun deleteAll()
 }
 
 data class DomainCount(val domain: String, val count: Int)
+data class HourlyCount(val hour: Long, val count: Int)

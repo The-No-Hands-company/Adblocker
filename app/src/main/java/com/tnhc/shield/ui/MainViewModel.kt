@@ -6,6 +6,9 @@ import android.content.Intent
 import android.net.VpnService
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tnhc.shield.apps.AppInfo
+import com.tnhc.shield.apps.AppRepository
+import com.tnhc.shield.data.db.dao.HourlyCount
 import com.tnhc.shield.data.prefs.ShieldPreferences
 import com.tnhc.shield.filter.FilterEngine
 import com.tnhc.shield.filter.FilterListManager
@@ -24,7 +27,8 @@ class MainViewModel @Inject constructor(
     private val prefs: ShieldPreferences,
     private val filterListManager: FilterListManager,
     private val filterEngine: FilterEngine,
-    private val stats: StatsRepository
+    private val stats: StatsRepository,
+    private val appRepository: AppRepository
 ) : ViewModel() {
 
     val isVpnEnabled: StateFlow<Boolean> = prefs.isVpnEnabled
@@ -47,6 +51,26 @@ class MainViewModel @Inject constructor(
     val topBlockedDomains = stats.topBlockedDomains(15)
     val allFilterLists = filterListManager.getAllLists()
 
+    val hourlyBlocks: StateFlow<List<HourlyCount>> = stats.blocksPerHour()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val excludedApps: StateFlow<Set<String>> = appRepository.excludedApps
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    private val _installedApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    val installedApps: StateFlow<List<AppInfo>> = _installedApps.asStateFlow()
+
+    fun loadApps() {
+        if (_installedApps.value.isNotEmpty()) return
+        viewModelScope.launch {
+            _installedApps.value = appRepository.getInstalledApps()
+        }
+    }
+
+    fun setAppExcluded(packageName: String, excluded: Boolean) {
+        viewModelScope.launch { appRepository.setAppExcluded(packageName, excluded) }
+    }
+
     fun setFilterEnabled(listId: String, enabled: Boolean) {
         viewModelScope.launch { filterListManager.setEnabled(listId, enabled) }
     }
@@ -54,7 +78,6 @@ class MainViewModel @Inject constructor(
     private val _needsVpnPermission = MutableSharedFlow<Unit>()
     val needsVpnPermission = _needsVpnPermission.asSharedFlow()
 
-    // Expose prefs flows for settings screen
     val dnsServerName: StateFlow<String> = prefs.dnsServerName
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Cloudflare")
     val autoStart: StateFlow<Boolean> = prefs.autoStart

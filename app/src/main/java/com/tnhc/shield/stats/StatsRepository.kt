@@ -2,6 +2,7 @@ package com.tnhc.shield.stats
 
 import com.tnhc.shield.data.db.dao.BlockEventDao
 import com.tnhc.shield.data.db.dao.DomainCount
+import com.tnhc.shield.data.db.dao.HourlyCount
 import com.tnhc.shield.data.db.entities.BlockEventEntity
 import kotlinx.coroutines.flow.Flow
 import java.util.concurrent.atomic.AtomicLong
@@ -45,6 +46,11 @@ class StatsRepository @Inject constructor(
         blockEventDao.topBlockedDomains(limit)
 
     fun recentBlocks(limit: Int = 50) = blockEventDao.recentEvents(limit)
+
+    fun blocksPerHour(): Flow<List<HourlyCount>> {
+        val since = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+        return blockEventDao.blocksPerHour(since)
+    }
 
     fun sessionBlocks(): Long = sessionBlockCount.get()
 

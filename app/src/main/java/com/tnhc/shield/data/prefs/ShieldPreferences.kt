@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -32,6 +33,7 @@ class ShieldPreferences @Inject constructor(
         val KEY_LAST_FILTER_UPDATE = longPreferencesKey("last_filter_update")
         val KEY_AUTO_UPDATE_FILTERS = booleanPreferencesKey("auto_update_filters")
         val KEY_THEME = stringPreferencesKey("theme")
+        val KEY_EXCLUDED_APPS = stringSetPreferencesKey("excluded_apps")
     }
 
     val isVpnEnabled: Flow<Boolean> = store.data.map { it[KEY_VPN_ENABLED] ?: false }
@@ -43,6 +45,7 @@ class ShieldPreferences @Inject constructor(
     val lastFilterUpdate: Flow<Long> = store.data.map { it[KEY_LAST_FILTER_UPDATE] ?: 0L }
     val autoUpdateFilters: Flow<Boolean> = store.data.map { it[KEY_AUTO_UPDATE_FILTERS] ?: true }
     val theme: Flow<String> = store.data.map { it[KEY_THEME] ?: "system" }
+    val excludedApps: Flow<Set<String>> = store.data.map { it[KEY_EXCLUDED_APPS] ?: emptySet() }
 
     suspend fun setVpnEnabled(enabled: Boolean) = store.edit { it[KEY_VPN_ENABLED] = enabled }
     suspend fun setDnsServer(url: String, name: String) = store.edit {
@@ -55,4 +58,5 @@ class ShieldPreferences @Inject constructor(
     suspend fun setLastFilterUpdate(time: Long) = store.edit { it[KEY_LAST_FILTER_UPDATE] = time }
     suspend fun setAutoUpdateFilters(enabled: Boolean) = store.edit { it[KEY_AUTO_UPDATE_FILTERS] = enabled }
     suspend fun setTheme(theme: String) = store.edit { it[KEY_THEME] = theme }
+    suspend fun setExcludedApps(packages: Set<String>) = store.edit { it[KEY_EXCLUDED_APPS] = packages }
 }
