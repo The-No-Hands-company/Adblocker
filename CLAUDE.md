@@ -46,7 +46,13 @@ app/src/main/java/com/tnhc/shield/
 
 ## Default Filter Lists
 
-12 lists included in `model/FilterListDef.kt > DefaultFilterLists.builtIn`. Downloaded on first run via `FilterUpdateWorker`. Key lists: OISD Full, EasyList, EasyPrivacy, AdGuard Base/Mobile/Tracking, Steven Black, HaGeZi Pro.
+13 lists in `model/FilterListDef.kt > DefaultFilterLists.builtIn`. Downloaded on first run via `FilterUpdateWorker`. Key lists: OISD Full, EasyList, EasyPrivacy, AdGuard Base/Mobile/Tracking, Steven Black, HaGeZi Pro, HaGeZi Pro Plus, Goodbye Ads (Mobile).
+
+Filter categories: `ADS`, `TRACKING`, `MALWARE`, `SOCIAL`, `ANNOYANCES`, `PRIVACY`, `MOBILE_GAMING`, `CUSTOM`.
+
+`FilterEngine.builtInBlockedExact` — hardcoded set of ~45 game/in-app ad SDK domains (Unity Ads, AppLovin/MAX, IronSource/LevelPlay, Vungle, Chartboost, AdColony, Tapjoy, InMobi, Pangle, Moloco, Fyber, Smaato). These survive filter list reloads and are always blocked.
+
+**DNS blocking limitation**: ~70% of in-app ads blocked via DNS. Some SDK builds (especially Unity Ads) embed hardcoded IP addresses that bypass DNS entirely. Full coverage requires v1.2 SNI inspection or v2.0 MITM proxy.
 
 ## Dev Notes
 
@@ -59,7 +65,11 @@ app/src/main/java/com/tnhc/shield/
 
 ## Roadmap
 
-- v1.1: Per-app split tunneling (disable Shield for specific apps)
+- v1.1: ✅ Per-app split tunneling — `addDisallowedApplication()` via Apps screen
 - v1.2: HTTPS SNI inspection (block by TLS hostname, not just DNS)
 - v1.3: Custom rule editor UI
+- v1.4: In-app & in-game ad blocking improvements
+  - Hardcoded SDK domains in `FilterEngine.builtInBlockedExact` (shipped)
+  - New filter lists: Goodbye Ads (Mobile), HaGeZi Pro Plus, AdGuard Mobile Ads (shipped)
+  - Future: IP-level blocking for SDK builds that bypass DNS (requires v1.2 SNI or v2.0 MITM)
 - v2.0: Optional HTTPS MITM proxy for full content filtering (cosmetic filters)

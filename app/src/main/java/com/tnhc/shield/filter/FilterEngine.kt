@@ -11,6 +11,72 @@ class FilterEngine {
     // Exact domain matches: "ads.example.com"
     private var blockedExact = HashSet<String>(64_000)
 
+    // Hardcoded SDK domains — always blocked, survive filter list reloads.
+    // Covers major game/in-app ad SDKs that generic lists sometimes miss.
+    private val builtInBlockedExact: Set<String> = setOf(
+        // Unity Ads / LevelPlay (IronSource)
+        "unityads.unity3d.com",
+        "auction.unityads.unity3d.com",
+        "config.unityads.unity3d.com",
+        "gameads.unity3d.com",
+        "ads.unity3d.com",
+        "static.ads.unity3d.com",
+        "video.unityads.unity3d.com",
+        "impact.unityads.unity3d.com",
+        "ads.ironsrc.com",
+        "delivery.ironsrc.com",
+        "outcome.ironsrc.com",
+        "impression.ironsrc.com",
+        "sis.ironsrc.com",
+        "api4.bat.bing.com",
+        // AppLovin / MAX
+        "rt.applovin.com",
+        "d.applovin.com",
+        "ads.applovin.com",
+        "f.applovin.com",
+        "track.applovin.com",
+        "mrtn.applovin.com",
+        "mobileperf.applovin.com",
+        "a.applovin.com",
+        "postbacks.applovin.com",
+        // Vungle / Liftoff
+        "api.vungle.com",
+        "ads.vungle.com",
+        "api.liftoff.io",
+        "events.liftoff.io",
+        // Chartboost
+        "live.chartboost.com",
+        "ads.chartboost.com",
+        // AdColony
+        "adc3-launch.adcolony.com",
+        "ads.adcolony.com",
+        "events.adcolony.com",
+        // Tapjoy
+        "ads.tapjoy.com",
+        "api.tapjoy.com",
+        "reporting.tapjoy.com",
+        // InMobi
+        "api.inmobi.com",
+        "adincdn.inmobi.com",
+        "ads.inmobi.com",
+        // Pangle (TikTok for Business)
+        "api16-pa.tiktokv.com",
+        "log.tiktokv.com",
+        "api3-pa.com",
+        // MoPub (retired but still deployed in older games)
+        "ads.mopub.com",
+        "ads.mopub.com",
+        // Moloco
+        "ads.moloco.com",
+        "metrics.moloco.com",
+        // Digital Turbine / Fyber
+        "ads.fyber.com",
+        "reporting.fyber.com",
+        // Smaato
+        "prebid.smaato.net",
+        "ads.smaato.net"
+    )
+
     // Domain suffix matches: entries like "example.com" block "ads.example.com", "sub.ads.example.com", etc.
     private var blockedSuffix = HashSet<String>(32_000)
 
@@ -50,7 +116,7 @@ class FilterEngine {
             blockedSuffix = newBlockedSuffix
             whitelistedExact = HashSet(newWhitelisted)
             whitelistedSuffix = HashSet()
-            totalRules = newBlockedExact.size + newBlockedSuffix.size
+            totalRules = newBlockedExact.size + newBlockedSuffix.size + builtInBlockedExact.size
         }
     }
 
@@ -59,6 +125,7 @@ class FilterEngine {
         lock.read {
             if (userWhitelistedExact.contains(d)) return false
             if (whitelistedExact.contains(d)) return false
+            if (builtInBlockedExact.contains(d)) return true
             if (userBlockedExact.contains(d)) return true
 
             // Check exact match

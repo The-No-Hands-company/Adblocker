@@ -22,6 +22,7 @@ enum class FilterCategory(val displayName: String) {
     SOCIAL("Social"),
     ANNOYANCES("Annoyances"),
     PRIVACY("Privacy"),
+    MOBILE_GAMING("Mobile & Gaming"),
     CUSTOM("Custom")
 }
 
@@ -43,6 +44,33 @@ object DefaultFilterLists {
             url = "https://filters.adtidy.org/android/filters/2_optimized.txt",
             format = FilterFormat.ADBLOCK,
             category = FilterCategory.ADS,
+            isBuiltIn = true
+        ),
+        FilterListDef(
+            id = "adguard_mobile",
+            name = "AdGuard Mobile Ads",
+            description = "Mobile-specific ad networks and in-app ads.",
+            url = "https://filters.adtidy.org/android/filters/11_optimized.txt",
+            format = FilterFormat.ADBLOCK,
+            category = FilterCategory.MOBILE_GAMING,
+            isBuiltIn = true
+        ),
+        FilterListDef(
+            id = "goodbye_ads_mobile",
+            name = "Goodbye Ads (Mobile)",
+            description = "Aggressive mobile-focused list. Covers Unity, AppLovin, ironSource and 400+ in-app ad SDKs.",
+            url = "https://raw.githubusercontent.com/jerryn70/GoodbyeAds/master/Hosts/GoodbyeAds.txt",
+            format = FilterFormat.HOSTS,
+            category = FilterCategory.MOBILE_GAMING,
+            isBuiltIn = true
+        ),
+        FilterListDef(
+            id = "hagezi_pro_plus",
+            name = "HaGeZi Pro Plus",
+            description = "Extended professional blocklist with strong mobile & gaming ad coverage.",
+            url = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.plus.txt",
+            format = FilterFormat.DOMAIN_LIST,
+            category = FilterCategory.MOBILE_GAMING,
             isBuiltIn = true
         ),
         FilterListDef(
@@ -82,30 +110,21 @@ object DefaultFilterLists {
             isBuiltIn = true
         ),
         FilterListDef(
-            id = "adguard_mobile",
-            name = "AdGuard Mobile Ads",
-            description = "Mobile-specific ad networks and in-app ads.",
-            url = "https://filters.adtidy.org/android/filters/11_optimized.txt",
-            format = FilterFormat.ADBLOCK,
-            category = FilterCategory.ADS,
-            isBuiltIn = true
-        ),
-        FilterListDef(
-            id = "goodbye_ads",
-            name = "Goodbye Ads (Mobile)",
-            description = "Aggressive mobile ad filter. Blocks ads in apps.",
-            url = "https://raw.githubusercontent.com/nicehash/NiceHashMobile/master/blocklist.txt",
-            format = FilterFormat.DOMAIN_LIST,
-            category = FilterCategory.ADS,
-            isBuiltIn = true
-        ),
-        FilterListDef(
             id = "malware_domains",
             name = "Malware Domains",
             description = "Blocks known malware distribution sites.",
             url = "https://filters.adtidy.org/android/filters/9_optimized.txt",
             format = FilterFormat.ADBLOCK,
             category = FilterCategory.MALWARE,
+            isBuiltIn = true
+        ),
+        FilterListDef(
+            id = "hagezi_pro",
+            name = "HaGeZi Pro",
+            description = "Professional-grade blocklist with high coverage.",
+            url = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt",
+            format = FilterFormat.DOMAIN_LIST,
+            category = FilterCategory.PRIVACY,
             isBuiltIn = true
         ),
         FilterListDef(
@@ -125,15 +144,6 @@ object DefaultFilterLists {
             format = FilterFormat.ADBLOCK,
             category = FilterCategory.SOCIAL,
             enabled = false,
-            isBuiltIn = true
-        ),
-        FilterListDef(
-            id = "hagezi_pro",
-            name = "HaGeZi Pro",
-            description = "Professional-grade blocklist with high coverage.",
-            url = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt",
-            format = FilterFormat.DOMAIN_LIST,
-            category = FilterCategory.PRIVACY,
             isBuiltIn = true
         )
     )
