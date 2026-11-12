@@ -1,5 +1,7 @@
 package com.tnhc.shield.ui.navigation
 
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -60,7 +62,7 @@ fun ShieldNavGraph() {
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
-            contentPadding = paddingValues
+            modifier = Modifier.padding(paddingValues)
         ) {
             composable(Screen.Home.route) { HomeScreen() }
             composable(Screen.Dashboard.route) { DashboardScreen() }

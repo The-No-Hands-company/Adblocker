@@ -1,0 +1,70 @@
+name: Build Shield APK
+
+on:
+  push:
+    branches: [ "ccr-c6c4c6d3-bir5dj", "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+          cache-read-only: false
+
+      - name: Make gradlew executable (if present)
+        run: chmod +x gradlew 2>/dev/null || true
+
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: |
+          mkdir -p artifacts
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             artifacts/Shield-v$(grep versionName app/build.gradle.kts | head -1 | grep -oP '"\K[^"]+' | head -1)-debug-$(echo $GITHUB_SHA | head -c 7).apk
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shield-APK-debug
+          path: artifacts/*.apk
+          retention-days: 30
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.apk
+          name: Shield ${{ github.ref_name }}
+          body: |
+            ## Shield ${{ github.ref_name }}
+
+            Your Digital Immune System — TNHC Android Adblocker
+
+            ### Install
+            1. Download the APK below
+            2. On your Android device: Settings → Security → Install unknown apps → enable for your browser/files app
+            3. Open the APK and install
+
+            ### What's new
+            See [CLAUDE.md](https://github.com/${{ github.repository }}/blob/main/CLAUDE.md) for architecture details.
+          draft: false
+          prerelease: false
