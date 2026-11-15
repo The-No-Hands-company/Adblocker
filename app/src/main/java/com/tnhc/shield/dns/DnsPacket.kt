@@ -205,7 +205,66 @@ object IpPacketParser {
         buf.putShort(srcPort.toShort()); buf.putShort(dstPort.toShort())
         buf.putShort(udpLen.toShort()); buf.putShort(0)
         buf.put(payload)
-        return buf.array()
+        val packet = buf.array()
+
+        // RFC 8200: Calculate mandatory IPv6 UDP pseudo-header checksum
+        val checksum = ipv6UdpChecksum(srcIp, dstIp, udpLen, packet, 40)
+        packet[46] = (checksum shr 8).toByte()
+        packet[47] = checksum.toByte()
+
+        return packet
+    }
+
+    private fun ipv6UdpChecksum(
+        srcIp: ByteArray,
+        dstIp: ByteArray,
+        udpLen: Int,
+        packet: ByteArray,
+        udpOffset: Int
+    ): Int {
+        var sum = 0L
+
+        // 1. Source IPv6 (16 bytes = 8 shorts)
+        for (i in 0 until 16 step 2) {
+            sum += ((srcIp[i].toInt() and 0xFF) shl 8) or (srcIp[i + 1].toInt() and 0xFF)
+        }
+
+        // 2. Destination IPv6 (16 bytes = 8 shorts)
+        for (i in 0 until 16 step 2) {
+            sum += ((dstIp[i].toInt() and 0xFF) shl 8) or (dstIp[i + 1].toInt() and 0xFF)
+        }
+
+        // 3. UDP Length (32-bit: 2 shorts)
+        sum += (udpLen shr 16) and 0xFFFF
+        sum += udpLen and 0xFFFF
+
+        // 4. Next Header (32-bit: 3 zero bytes + protocol 17)
+        sum += 17
+
+        // 5. UDP Header & Payload (from udpOffset)
+        var i = udpOffset
+        val end = udpOffset + udpLen
+        while (i < end - 1) {
+            // Skip the checksum field itself (offset 6 and 7 within UDP header)
+            if (i == udpOffset + 6) {
+                i += 2
+                continue
+            }
+            sum += ((packet[i].toInt() and 0xFF) shl 8) or (packet[i + 1].toInt() and 0xFF)
+            i += 2
+        }
+        // Pad odd byte if any
+        if (i < end) {
+            sum += (packet[i].toInt() and 0xFF) shl 8
+        }
+
+        // Fold 32-bit sum to 16 bits
+        while (sum shr 16 != 0L) {
+            sum = (sum and 0xFFFF) + (sum shr 16)
+        }
+
+        val checksum = (sum.inv() and 0xFFFF).toInt()
+        return if (checksum == 0) 0xFFFF else checksum
     }
 
     private fun ipv4Checksum(data: ByteArray, offset: Int, length: Int): Int {

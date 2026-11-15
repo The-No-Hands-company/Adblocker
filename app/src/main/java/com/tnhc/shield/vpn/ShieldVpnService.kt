@@ -30,8 +30,13 @@ class ShieldVpnService : VpnService() {
         const val ACTION_STOP = "com.tnhc.shield.STOP_VPN"
         const val VPN_ADDRESS = "10.0.0.2"
         const val VPN_DNS = "10.0.0.2"
+        const val VPN_ADDRESS_V6 = "fd00::1"
+        const val VPN_DNS_V6 = "fd00::1"
         const val NOTIFICATION_ID = 1
         const val CHANNEL_ID = "shield_vpn"
+
+        private val _isRunning = kotlinx.coroutines.flow.MutableStateFlow(false)
+        val isRunning: kotlinx.coroutines.flow.StateFlow<Boolean> = _isRunning
     }
 
     @Inject lateinit var dnsEngine: DnsEngine
@@ -40,6 +45,7 @@ class ShieldVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private var serviceJob: Job? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var writeChannel: kotlinx.coroutines.channels.Channel<ByteArray>? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -55,6 +61,7 @@ class ShieldVpnService : VpnService() {
     private fun startShield() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
+        _isRunning.value = true
         setupVpn()
     }
 
@@ -66,8 +73,19 @@ class ShieldVpnService : VpnService() {
                     .addAddress(VPN_ADDRESS, 32)
                     .addRoute(VPN_ADDRESS, 32)
                     .addDnsServer(VPN_DNS)
+                    // IPv6 Dual-Stack Support to prevent IPv6 DNS leaks
+                    .addAddress(VPN_ADDRESS_V6, 128)
+                    .addRoute(VPN_ADDRESS_V6, 128)
+                    .addDnsServer(VPN_DNS_V6)
                     .setSession("Shield")
                     .setMtu(1500)
+
+                // Exclude Shield's own package to prevent DoH and filter update loops
+                try {
+                    builder.addDisallowedApplication(packageName)
+                } catch (_: Exception) {}
+
+                // User excluded apps
                 excluded.forEach { pkg ->
                     try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
                 }
@@ -76,6 +94,7 @@ class ShieldVpnService : VpnService() {
                     serviceJob = launch { runPacketLoop(pfd) }
                 }
             } catch (e: Exception) {
+                _isRunning.value = false
                 stopSelf()
             }
         }
@@ -86,27 +105,44 @@ class ShieldVpnService : VpnService() {
         val output = FileOutputStream(pfd.fileDescriptor)
         val buffer = ByteBuffer.allocate(32_768)
 
-        while (currentCoroutineContext().isActive) {
-            buffer.clear()
-            val length = withContext(Dispatchers.IO) {
-                try { input.read(buffer.array()) } catch (e: Exception) { -1 }
-            }
-            if (length <= 0) {
-                delay(1)
-                continue
-            }
+        val channel = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+        writeChannel = channel
 
-            val raw = buffer.array().copyOf(length)
+        // Dedicated single-coroutine writer loop to prevent concurrent writes on the TUN file descriptor
+        val writerJob = serviceScope.launch(Dispatchers.IO) {
+            for (packet in channel) {
+                try {
+                    output.write(packet)
+                    output.flush()
+                } catch (_: Exception) {}
+            }
+        }
 
-            // Process packet asynchronously; write response back
-            serviceScope.launch {
-                val response = processPacket(raw)
-                if (response != null) {
-                    withContext(Dispatchers.IO) {
-                        try { output.write(response) } catch (_: Exception) {}
+        try {
+            while (currentCoroutineContext().isActive) {
+                buffer.clear()
+                val length = withContext(Dispatchers.IO) {
+                    try { input.read(buffer.array()) } catch (e: Exception) { -1 }
+                }
+                if (length <= 0) {
+                    delay(1)
+                    continue
+                }
+
+                val raw = buffer.array().copyOf(length)
+
+                // Process packet asynchronously; send response to writer channel
+                serviceScope.launch {
+                    val response = processPacket(raw)
+                    if (response != null) {
+                        channel.send(response)
                     }
                 }
             }
+        } finally {
+            writerJob.cancel()
+            channel.close()
+            writeChannel = null
         }
     }
 
@@ -123,8 +159,11 @@ class ShieldVpnService : VpnService() {
     }
 
     private fun stopShield() {
+        _isRunning.value = false
         serviceJob?.cancel()
         serviceJob = null
+        writeChannel?.close()
+        writeChannel = null
         vpnInterface?.close()
         vpnInterface = null
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -132,8 +171,10 @@ class ShieldVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        _isRunning.value = false
         serviceJob?.cancel()
         serviceScope.cancel()
+        writeChannel?.close()
         vpnInterface?.close()
         super.onDestroy()
     }

@@ -7,9 +7,16 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class DohClient(private val serverUrl: String, private val client: OkHttpClient) {
+class DohClient(
+    @Volatile var serverUrl: String,
+    private val client: OkHttpClient
+) {
 
     private val dnsMediaType = "application/dns-message".toMediaType()
+
+    fun updateServerUrl(newUrl: String) {
+        serverUrl = newUrl
+    }
 
     suspend fun resolve(dnsQuery: ByteArray): ByteArray? {
         val request = Request.Builder()

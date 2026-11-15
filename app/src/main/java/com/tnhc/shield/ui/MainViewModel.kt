@@ -8,8 +8,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tnhc.shield.apps.AppInfo
 import com.tnhc.shield.apps.AppRepository
+import com.tnhc.shield.data.db.dao.CustomRuleDao
+import com.tnhc.shield.data.db.dao.DnsLogDao
 import com.tnhc.shield.data.db.dao.HourlyCount
+import com.tnhc.shield.data.db.entities.CustomRuleEntity
+import com.tnhc.shield.data.db.entities.DnsLogEntity
 import com.tnhc.shield.data.prefs.ShieldPreferences
+import com.tnhc.shield.dns.DnsEngine
+import com.tnhc.shield.dns.DohClient
 import com.tnhc.shield.filter.FilterEngine
 import com.tnhc.shield.filter.FilterListManager
 import com.tnhc.shield.stats.StatsRepository
@@ -28,7 +34,11 @@ class MainViewModel @Inject constructor(
     private val filterListManager: FilterListManager,
     private val filterEngine: FilterEngine,
     private val stats: StatsRepository,
-    private val appRepository: AppRepository
+    private val appRepository: AppRepository,
+    private val dohClient: DohClient,
+    private val dnsEngine: DnsEngine,
+    private val customRuleDao: CustomRuleDao,
+    private val dnsLogDao: DnsLogDao
 ) : ViewModel() {
 
     val isVpnEnabled: StateFlow<Boolean> = prefs.isVpnEnabled
@@ -50,6 +60,12 @@ class MainViewModel @Inject constructor(
     val recentBlocks = stats.recentBlocks(20)
     val topBlockedDomains = stats.topBlockedDomains(15)
     val allFilterLists = filterListManager.getAllLists()
+
+    val customRules: StateFlow<List<CustomRuleEntity>> = customRuleDao.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val dnsLogs: StateFlow<List<DnsLogEntity>> = dnsLogDao.getRecentLogs(100)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val hourlyBlocks: StateFlow<List<HourlyCount>> = stats.blocksPerHour()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -75,6 +91,42 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch { filterListManager.setEnabled(listId, enabled) }
     }
 
+    fun addCustomRule(domain: String, isWhitelist: Boolean, notes: String? = null) {
+        val cleanDomain = domain.trim().lowercase().removePrefix("https://").removePrefix("http://").trimEnd('/')
+        if (cleanDomain.isBlank()) return
+        viewModelScope.launch {
+            customRuleDao.insert(
+                CustomRuleEntity(
+                    domain = cleanDomain,
+                    isWhitelist = isWhitelist,
+                    notes = notes
+                )
+            )
+            filterEngine.addUserRule(cleanDomain, block = !isWhitelist)
+        }
+    }
+
+    fun deleteCustomRule(id: Long) {
+        viewModelScope.launch {
+            customRuleDao.delete(id)
+            val all = customRuleDao.getAll()
+            filterEngine.loadCustomRules(all)
+        }
+    }
+
+    fun deleteCustomRuleByDomain(domain: String) {
+        viewModelScope.launch {
+            customRuleDao.deleteByDomain(domain.lowercase().trim())
+            filterEngine.removeUserRule(domain)
+        }
+    }
+
+    fun clearDnsLogs() {
+        viewModelScope.launch {
+            dnsLogDao.clearAll()
+        }
+    }
+
     private val _needsVpnPermission = MutableSharedFlow<Unit>()
     val needsVpnPermission = _needsVpnPermission.asSharedFlow()
 
@@ -87,7 +139,13 @@ class MainViewModel @Inject constructor(
 
     fun setAutoStart(enabled: Boolean) { viewModelScope.launch { prefs.setAutoStart(enabled) } }
     fun setAutoUpdateFilters(enabled: Boolean) { viewModelScope.launch { prefs.setAutoUpdateFilters(enabled) } }
-    fun setDnsServer(url: String, name: String) { viewModelScope.launch { prefs.setDnsServer(url, name) } }
+    fun setDnsServer(url: String, name: String) {
+        viewModelScope.launch {
+            prefs.setDnsServer(url, name)
+            dohClient.updateServerUrl(url)
+            dnsEngine.clearCache()
+        }
+    }
 
     private val _isInitializing = MutableStateFlow(true)
     val isInitializing = _isInitializing.asStateFlow()
@@ -96,7 +154,23 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             filterListManager.initialize()
             FilterUpdateWorker.schedule(context)
+            FilterUpdateWorker.scheduleOnce(context) // Trigger initial background sync
             _isInitializing.value = false
+        }
+
+        // Dynamically update DoH server and invalidate cache on preference changes
+        viewModelScope.launch {
+            prefs.dnsServerUrl.collect { url ->
+                dohClient.updateServerUrl(url)
+                dnsEngine.clearCache()
+            }
+        }
+
+        // Synchronize custom rules into FilterEngine
+        viewModelScope.launch {
+            customRuleDao.observeAll().collect { rules ->
+                filterEngine.loadCustomRules(rules)
+            }
         }
     }
 

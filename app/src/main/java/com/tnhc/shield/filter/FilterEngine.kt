@@ -159,6 +159,20 @@ class FilterEngine {
         return false
     }
 
+    fun loadCustomRules(rules: List<com.tnhc.shield.data.db.entities.CustomRuleEntity>) {
+        val blocked = HashSet<String>()
+        val whitelisted = HashSet<String>()
+        rules.forEach { rule ->
+            val d = rule.domain.lowercase().trimEnd('.')
+            if (rule.isWhitelist) whitelisted.add(d)
+            else blocked.add(d)
+        }
+        lock.write {
+            userBlockedExact = blocked
+            userWhitelistedExact = whitelisted
+        }
+    }
+
     fun addUserRule(domain: String, block: Boolean) {
         lock.write {
             if (block) userBlockedExact.add(domain.lowercase())

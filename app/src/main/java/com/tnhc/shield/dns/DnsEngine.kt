@@ -1,5 +1,7 @@
 package com.tnhc.shield.dns
 
+import com.tnhc.shield.data.db.dao.DnsLogDao
+import com.tnhc.shield.data.db.entities.DnsLogEntity
 import com.tnhc.shield.filter.FilterEngine
 import com.tnhc.shield.stats.StatsRepository
 import kotlinx.coroutines.withTimeoutOrNull
@@ -14,7 +16,8 @@ data class DnsCacheEntry(
 class DnsEngine(
     private val filterEngine: FilterEngine,
     private val dohClient: DohClient,
-    private val stats: StatsRepository
+    private val stats: StatsRepository,
+    private val dnsLogDao: DnsLogDao? = null
 ) {
 
     private val cache = ConcurrentHashMap<String, DnsCacheEntry>()
@@ -22,17 +25,48 @@ class DnsEngine(
 
     suspend fun handleDnsQuery(rawQuery: ByteArray): ByteArray {
         val query = DnsPacketParser.parseQuery(rawQuery) ?: return rawQuery
+        val qtypeStr = if (query.isAAAARecord) "AAAA" else "A"
 
         // Check whitelist first
         if (filterEngine.isWhitelisted(query.domain)) {
+            try {
+                dnsLogDao?.insert(
+                    DnsLogEntity(
+                        domain = query.domain,
+                        qtype = qtypeStr,
+                        isBlocked = false,
+                        ruleMatched = "Whitelist"
+                    )
+                )
+            } catch (_: Exception) {}
             return forwardOrCached(query, rawQuery)
         }
 
         // Check blocklist
         if (filterEngine.isBlocked(query.domain)) {
             stats.recordBlock(query.domain)
+            try {
+                dnsLogDao?.insert(
+                    DnsLogEntity(
+                        domain = query.domain,
+                        qtype = qtypeStr,
+                        isBlocked = true,
+                        ruleMatched = "Blocklist"
+                    )
+                )
+            } catch (_: Exception) {}
             return DnsPacketParser.buildNxdomainResponse(rawQuery)
         }
+
+        try {
+            dnsLogDao?.insert(
+                DnsLogEntity(
+                    domain = query.domain,
+                    qtype = qtypeStr,
+                    isBlocked = false
+                )
+            )
+        } catch (_: Exception) {}
 
         return forwardOrCached(query, rawQuery)
     }
@@ -66,31 +100,43 @@ class DnsEngine(
     }
 
     private fun extractMinTtl(response: ByteArray): Int {
-        // Try to extract TTL from first answer record; fallback to 60s
+        // Extract TTL from first answer record with correct pointer skipping; fallback to 60s
         return try {
             val buf = java.nio.ByteBuffer.wrap(response)
             val anCount = buf.getShort(6).toInt() and 0xFFFF
             if (anCount == 0) return 60
+
             // Skip header (12 bytes) + question section
             var pos = 12
             // Skip QNAME
             while (pos < response.size && response[pos].toInt() and 0xFF != 0) {
                 val len = response[pos].toInt() and 0xFF
-                if (len and 0xC0 == 0xC0) { pos += 2; break }
+                if (len and 0xC0 == 0xC0) {
+                    pos += 2
+                    break
+                }
                 pos += len + 1
             }
-            if (response[pos].toInt() and 0xFF == 0) pos++
+            if (pos < response.size && response[pos].toInt() and 0xFF == 0) pos++
             pos += 4 // skip QTYPE + QCLASS
-            // Answer record: skip NAME (may be pointer 0xC0xx)
-            if (pos + 2 < response.size && response[pos].toInt() and 0xFF == 0xC0) pos += 2
-            else while (pos < response.size && response[pos].toInt() and 0xFF != 0) {
-                pos += (response[pos].toInt() and 0xFF) + 1
+
+            // Answer record: skip NAME
+            if (pos + 2 < response.size && (response[pos].toInt() and 0xC0) == 0xC0) {
+                pos += 2 // Pointer is 2 bytes, no trailing null byte
+            } else {
+                while (pos < response.size && response[pos].toInt() and 0xFF != 0) {
+                    pos += (response[pos].toInt() and 0xFF) + 1
+                }
+                if (pos < response.size && response[pos].toInt() and 0xFF == 0) pos++
             }
-            pos += 1 + 4 // skip null + TYPE + CLASS
+
+            pos += 4 // skip TYPE (2) + CLASS (2)
+            if (pos + 4 > response.size) return 60
+
             val ttl = ((response[pos].toInt() and 0xFF) shl 24) or
-                      ((response[pos+1].toInt() and 0xFF) shl 16) or
-                      ((response[pos+2].toInt() and 0xFF) shl 8) or
-                      (response[pos+3].toInt() and 0xFF)
+                      ((response[pos + 1].toInt() and 0xFF) shl 16) or
+                      ((response[pos + 2].toInt() and 0xFF) shl 8) or
+                      (response[pos + 3].toInt() and 0xFF)
             ttl.coerceIn(10, 3600)
         } catch (e: Exception) {
             60

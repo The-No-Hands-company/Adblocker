@@ -1,5 +1,6 @@
 package com.tnhc.shield.di
 
+import com.tnhc.shield.dns.BootstrapDns
 import com.tnhc.shield.dns.DohClient
 import dagger.Module
 import dagger.Provides
@@ -16,6 +17,7 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        .dns(BootstrapDns)
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.SECONDS)
         .writeTimeout(5, TimeUnit.SECONDS)

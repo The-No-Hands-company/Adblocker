@@ -28,7 +28,21 @@ class FilterListManager @Inject constructor(
 
     suspend fun initialize() {
         ensureDefaultListsExist()
+        loadStarterBlocklistIfEmpty()
         reloadFilterEngine()
+    }
+
+    private suspend fun loadStarterBlocklistIfEmpty() = withContext(Dispatchers.IO) {
+        val files = listsDir.listFiles()?.filter { it.extension == "txt" }
+        if (files.isNullOrEmpty()) {
+            try {
+                context.assets.open("starter_blocklist.txt").use { stream ->
+                    val content = stream.bufferedReader().readText()
+                    val result = FilterListParser.parse(content, FilterFormat.DOMAIN_LIST)
+                    filterEngine.loadRules(listOf(result))
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     private suspend fun ensureDefaultListsExist() = withContext(Dispatchers.IO) {

@@ -19,19 +19,23 @@ Not part of NSCP. Similar positioning to DevTrack within the TNHC ecosystem.
 
 ```
 app/src/main/java/com/tnhc/shield/
-├── vpn/ShieldVpnService.kt     # VPN service — intercepts DNS via TUN interface
-├── dns/DnsEngine.kt            # DNS query handler (block/forward/cache)
-├── dns/DnsPacket.kt            # IP/UDP/DNS packet parsing and building
-├── dns/DohClient.kt            # DNS-over-HTTPS client
-├── filter/FilterEngine.kt      # HashSet-based domain blocklist (O(1) lookup)
+├── vpn/ShieldVpnService.kt     # VPN service — intercepts DNS via TUN, IPv4/IPv6 dual-stack, channel sync
+├── service/ShieldTileService.kt # Android Quick Settings Tile for 1-tap toggling
+├── dns/DnsEngine.kt            # DNS query handler (block/forward/cache, live query logging)
+├── dns/DnsPacket.kt            # IP/UDP/DNS packet parsing and building (IPv4 & IPv6 UDP checksums)
+├── dns/DohClient.kt            # DNS-over-HTTPS client with dynamic server switching
+├── dns/BootstrapDns.kt         # Static bootstrap IP mapping for DoH endpoints
+├── dns/SniParser.kt            # TLS ClientHello SNI extractor for port 443 packets
+├── filter/FilterEngine.kt      # HashSet-based domain blocklist (O(1) lookup + custom rules)
+├── filter/IpBlocklistEngine.kt # CIDR IP subnet blocklist for hardcoded ad SDK edge servers
 ├── filter/FilterListParser.kt  # Parses hosts/domain-list/EasyList formats
-├── filter/FilterListManager.kt # Downloads and manages filter lists
-├── data/db/                    # Room database (block events, filter lists)
+├── filter/FilterListManager.kt # Downloads filter lists + cold-start starter blocklist
+├── data/db/                    # Room database (block events, filter lists, custom rules, DNS logs)
 ├── data/prefs/ShieldPreferences.kt  # DataStore preferences
 ├── stats/StatsRepository.kt    # Block event tracking
 ├── work/FilterUpdateWorker.kt  # Background filter list updates (WorkManager)
-├── ui/MainViewModel.kt         # Main ViewModel (shared across all screens)
-└── ui/screens/                 # Compose screens: home, dashboard, filters, apps, settings
+├── ui/MainViewModel.kt         # Main ViewModel (custom rules, query logs, DoH dynamic switching)
+└── ui/screens/                 # Compose screens: home, dashboard (live query log), filters (custom rules), apps, settings
 ```
 
 ## How the VPN Works
@@ -66,10 +70,13 @@ Filter categories: `ADS`, `TRACKING`, `MALWARE`, `SOCIAL`, `ANNOYANCES`, `PRIVAC
 ## Roadmap
 
 - v1.1: ✅ Per-app split tunneling — `addDisallowedApplication()` via Apps screen
-- v1.2: HTTPS SNI inspection (block by TLS hostname, not just DNS)
-- v1.3: Custom rule editor UI
-- v1.4: In-app & in-game ad blocking improvements
-  - Hardcoded SDK domains in `FilterEngine.builtInBlockedExact` (shipped)
-  - New filter lists: Goodbye Ads (Mobile), HaGeZi Pro Plus, AdGuard Mobile Ads (shipped)
-  - Future: IP-level blocking for SDK builds that bypass DNS (requires v1.2 SNI or v2.0 MITM)
+- v1.2: ✅ HTTPS SNI inspection (`SniParser.kt` — parse TLS ClientHello SNI hostnames)
+- v1.3: ✅ Custom rule editor UI + Real-time Live Query Log + Android Quick Settings Tile
+- v1.4: ✅ In-app & in-game ad blocking improvements
+  - Hardcoded SDK domains in `FilterEngine.builtInBlockedExact`
+  - Starter compact blocklist in `assets/starter_blocklist.txt` for zero-day cold-start protection
+  - CIDR IP-level blocking for ad SDK edge clusters (`IpBlocklistEngine.kt`)
+  - Dual-stack IPv6 interface & DNS route (`fd00::1`) to eliminate IPv6 DNS leaks
+  - Dynamic DoH server switching with static bootstrap IP resolver (`BootstrapDns.kt`)
+  - Channel-based synchronized TUN writer to prevent file descriptor corruption
 - v2.0: Optional HTTPS MITM proxy for full content filtering (cosmetic filters)

@@ -1,5 +1,6 @@
 package com.tnhc.shield.di
 
+import com.tnhc.shield.data.db.dao.DnsLogDao
 import com.tnhc.shield.dns.DnsEngine
 import com.tnhc.shield.dns.DohClient
 import com.tnhc.shield.filter.FilterEngine
@@ -20,9 +21,15 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideIpBlocklistEngine(): com.tnhc.shield.filter.IpBlocklistEngine =
+        com.tnhc.shield.filter.IpBlocklistEngine()
+
+    @Provides
+    @Singleton
     fun provideDnsEngine(
         filterEngine: FilterEngine,
         dohClient: DohClient,
-        statsRepository: StatsRepository
-    ): DnsEngine = DnsEngine(filterEngine, dohClient, statsRepository)
+        statsRepository: StatsRepository,
+        dnsLogDao: DnsLogDao
+    ): DnsEngine = DnsEngine(filterEngine, dohClient, statsRepository, dnsLogDao)
 }

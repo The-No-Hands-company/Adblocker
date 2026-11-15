@@ -32,6 +32,9 @@ jobs:
       - name: Make gradlew executable (if present)
         run: chmod +x gradlew 2>/dev/null || true
 
+      - name: Run Unit Tests
+        run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
+
       - name: Build Debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 

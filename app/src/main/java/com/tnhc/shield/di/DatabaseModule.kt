@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import com.tnhc.shield.data.db.ShieldDatabase
 import com.tnhc.shield.data.db.dao.BlockEventDao
+import com.tnhc.shield.data.db.dao.CustomRuleDao
+import com.tnhc.shield.data.db.dao.DnsLogDao
 import com.tnhc.shield.data.db.dao.FilterListDao
 import dagger.Module
 import dagger.Provides
@@ -28,4 +30,10 @@ object DatabaseModule {
 
     @Provides
     fun provideFilterListDao(db: ShieldDatabase): FilterListDao = db.filterListDao()
+
+    @Provides
+    fun provideCustomRuleDao(db: ShieldDatabase): CustomRuleDao = db.customRuleDao()
+
+    @Provides
+    fun provideDnsLogDao(db: ShieldDatabase): DnsLogDao = db.dnsLogDao()
 }
