@@ -13,5 +13,6 @@ local.properties
 *.jks
 *.keystore
 
-# Google services
-google-services.json
+# Artifacts & APKs
+artifacts/
+*.apk
