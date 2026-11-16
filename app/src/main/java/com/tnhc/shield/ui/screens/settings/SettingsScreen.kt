@@ -17,6 +17,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tnhc.shield.dns.DnsServerDef
 import com.tnhc.shield.dns.DnsServers
 import com.tnhc.shield.ui.MainViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(viewModel: MainViewModel = hiltViewModel()) {
