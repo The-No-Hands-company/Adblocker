@@ -86,19 +86,13 @@ class DnsEngine(
         // Inspect resolved A records against ad IP / CDN blocklist
         if (ipBlocklistEngine != null && isResponseIpBlocked(response)) {
             try {
-                stats.recordBlock(
-                    com.tnhc.shield.stats.BlockEvent(
-                        domain = query.domain,
-                        category = com.tnhc.shield.model.FilterCategory.ADS,
-                        matchedFilter = "Ad IP/CDN Cluster"
-                    )
-                )
+                stats.recordBlock(query.domain)
                 dnsLogDao?.insert(
                     DnsLogEntity(
                         domain = query.domain,
+                        qtype = if (query.isAAAARecord) "AAAA" else "A",
                         isBlocked = true,
-                        matchedFilter = "Ad IP/CDN Cluster",
-                        timestamp = System.currentTimeMillis()
+                        ruleMatched = "Ad IP/CDN Cluster"
                     )
                 )
             } catch (_: Exception) {}
