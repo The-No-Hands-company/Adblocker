@@ -41,6 +41,8 @@ class ShieldVpnService : VpnService() {
 
     @Inject lateinit var dnsEngine: DnsEngine
     @Inject lateinit var prefs: ShieldPreferences
+    @Inject lateinit var ipBlocklistEngine: com.tnhc.shield.filter.IpBlocklistEngine
+    @Inject lateinit var filterEngine: com.tnhc.shield.filter.FilterEngine
 
     private var vpnInterface: ParcelFileDescriptor? = null
     private var serviceJob: Job? = null
@@ -79,6 +81,13 @@ class ShieldVpnService : VpnService() {
                     .addDnsServer(VPN_DNS_V6)
                     .setSession("Shield")
                     .setMtu(1500)
+
+                // Route hardcoded ad server IPs directly into TUN to kill them fast with TCP RST
+                ipBlocklistEngine.routedExactIps.forEach { ip ->
+                    try {
+                        builder.addRoute(ip, 32)
+                    } catch (_: Exception) {}
+                }
 
                 // Exclude Shield's own package to prevent DoH and filter update loops
                 try {
@@ -147,15 +156,39 @@ class ShieldVpnService : VpnService() {
     }
 
     private suspend fun processPacket(raw: ByteArray): ByteArray? {
-        val ipUdp = IpPacketParser.parseUdpPacket(raw) ?: return null
+        val ipUdp = IpPacketParser.parseUdpPacket(raw)
+        if (ipUdp != null) {
+            // Only handle DNS (port 53)
+            if (ipUdp.dstPort == 53) {
+                val dnsPayload = ipUdp.payload
+                val dnsResponse = dnsEngine.handleDnsQuery(dnsPayload)
+                return IpPacketParser.buildUdpResponse(ipUdp, dnsResponse)
+            }
+            // Drop UDP packets directed to blocked ad IP clusters
+            if (ipBlocklistEngine.isBlocked(ipUdp.dstIp)) {
+                return null
+            }
+            return null
+        }
 
-        // Only handle DNS (port 53)
-        if (ipUdp.dstPort != 53) return null
+        // Direct TCP attempt or port 443 SNI inspection
+        val ipTcp = IpPacketParser.parseTcpPacket(raw)
+        if (ipTcp != null) {
+            // Direct TCP attempt to hardcoded ad IP cluster -> reject immediately with TCP RST
+            if (ipBlocklistEngine.isBlocked(ipTcp.dstIp)) {
+                return IpPacketParser.buildTcpRstResponse(ipTcp)
+            }
 
-        val dnsPayload = ipUdp.payload
-        val dnsResponse = dnsEngine.handleDnsQuery(dnsPayload)
+            // Port 443 TLS ClientHello SNI inspection
+            if (ipTcp.dstPort == 443 && ipTcp.payload.isNotEmpty()) {
+                val sni = com.tnhc.shield.dns.SniParser.parseSni(ipTcp.payload)
+                if (sni != null && filterEngine.isBlocked(sni)) {
+                    return IpPacketParser.buildTcpRstResponse(ipTcp)
+                }
+            }
+        }
 
-        return IpPacketParser.buildUdpResponse(ipUdp, dnsResponse)
+        return null
     }
 
     private fun stopShield() {

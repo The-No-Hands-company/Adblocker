@@ -64,4 +64,49 @@ class IpPacketParserTest {
         val checksum = ((response[46].toInt() and 0xFF) shl 8) or (response[47].toInt() and 0xFF)
         assertNotEquals(0, checksum)
     }
+
+    @Test
+    fun testParseIpv4TcpPacketAndBuildRst() {
+        val totalLen = 40
+        val buf = ByteBuffer.allocate(totalLen)
+        buf.put(0x45.toByte())
+        buf.put(0.toByte())
+        buf.putShort(totalLen.toShort())
+        buf.putShort(1)
+        buf.putShort(0)
+        buf.put(64.toByte())
+        buf.put(6.toByte()) // Protocol TCP
+        buf.putShort(0)
+        buf.put(byteArrayOf(10, 0, 0, 2))
+        buf.put(byteArrayOf(34, 192.toByte(), 122, 188.toByte()))
+
+        buf.putShort(50000.toShort()) // Src Port
+        buf.putShort(443.toShort())   // Dst Port
+        buf.putInt(1000)              // Seq
+        buf.putInt(0)                 // Ack
+        buf.put((5 shl 4).toByte())   // Data offset: 5
+        buf.put(0x02.toByte())        // Flags: SYN (0x02)
+        buf.putShort(65535.toShort()) // Window
+        buf.putShort(0)
+        buf.putShort(0)
+
+        val tcpPacket = IpPacketParser.parseTcpPacket(buf.array())
+        assertNotNull(tcpPacket)
+        assertEquals(4, tcpPacket!!.version)
+        assertEquals(50000, tcpPacket.srcPort)
+        assertEquals(443, tcpPacket.dstPort)
+        assertEquals(1000L, tcpPacket.seqNumber)
+        assertEquals(0x02, tcpPacket.flags)
+
+        val rst = IpPacketParser.buildTcpRstResponse(tcpPacket)
+        assertEquals(40, rst.size)
+        // Protocol must be TCP (6)
+        assertEquals(6, rst[9].toInt() and 0xFF)
+        // Src IP must be original Dst IP
+        assertArrayEquals(byteArrayOf(34, 192.toByte(), 122, 188.toByte()), rst.copyOfRange(12, 16))
+        // Dst IP must be original Src IP
+        assertArrayEquals(byteArrayOf(10, 0, 0, 2), rst.copyOfRange(16, 20))
+        // TCP RST flags must be RST | ACK (0x14)
+        assertEquals(0x14, rst[33].toInt() and 0xFF)
+    }
 }

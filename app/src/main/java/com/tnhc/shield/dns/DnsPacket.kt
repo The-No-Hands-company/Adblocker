@@ -104,6 +104,19 @@ data class IpUdpPacket(
     val rawPacket: ByteArray
 )
 
+data class IpTcpPacket(
+    val version: Int,
+    val srcIp: ByteArray,
+    val dstIp: ByteArray,
+    val srcPort: Int,
+    val dstPort: Int,
+    val seqNumber: Long,
+    val ackNumber: Long,
+    val flags: Int,
+    val payload: ByteArray,
+    val rawPacket: ByteArray
+)
+
 object IpPacketParser {
 
     fun parseUdpPacket(raw: ByteArray): IpUdpPacket? {
@@ -276,5 +289,134 @@ object IpPacketParser {
         }
         while (sum shr 16 != 0) sum = (sum and 0xFFFF) + (sum shr 16)
         return sum.inv() and 0xFFFF
+    }
+
+    fun parseTcpPacket(raw: ByteArray): IpTcpPacket? {
+        return try {
+            if (raw.size < 20) return null
+            val buf = ByteBuffer.wrap(raw)
+            val versionIhl = buf.get().toInt() and 0xFF
+            val version = versionIhl shr 4
+            val ihl = (versionIhl and 0x0F) * 4
+
+            if (version == 4) {
+                if (raw.size < ihl + 20) return null
+                buf.position(9)
+                val protocol = buf.get().toInt() and 0xFF
+                if (protocol != 6) return null // 6 = TCP
+
+                buf.position(12)
+                val srcIp = ByteArray(4); buf.get(srcIp)
+                val dstIp = ByteArray(4); buf.get(dstIp)
+
+                buf.position(ihl)
+                val srcPort = buf.short.toInt() and 0xFFFF
+                val dstPort = buf.short.toInt() and 0xFFFF
+                val seqNumber = buf.int.toLong() and 0xFFFFFFFFL
+                val ackNumber = buf.int.toLong() and 0xFFFFFFFFL
+                val dataOffsetAndReserved = buf.get().toInt() and 0xFF
+                val tcpHeaderLen = ((dataOffsetAndReserved shr 4) and 0x0F) * 4
+                val flags = buf.get().toInt() and 0xFF
+
+                val payloadOffset = ihl + tcpHeaderLen
+                val payloadLen = (raw.size - payloadOffset).coerceAtLeast(0)
+                val payload = if (payloadLen > 0 && payloadOffset + payloadLen <= raw.size) {
+                    raw.copyOfRange(payloadOffset, payloadOffset + payloadLen)
+                } else {
+                    ByteArray(0)
+                }
+
+                IpTcpPacket(4, srcIp, dstIp, srcPort, dstPort, seqNumber, ackNumber, flags, payload, raw)
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun buildTcpRstResponse(request: IpTcpPacket): ByteArray {
+        val hasAck = (request.flags and 0x10) != 0
+        val rstSeq = if (hasAck) request.ackNumber else 0L
+        val rstAck = if (hasAck) 0L else (request.seqNumber + 1L) and 0xFFFFFFFFL
+        val rstFlags = if (hasAck) 0x04 else 0x14 // RST (0x04) or RST|ACK (0x14)
+
+        val totalLen = 40 // 20 IP + 20 TCP
+        val buf = ByteBuffer.allocate(totalLen)
+
+        // IPv4 Header
+        buf.put(0x45.toByte())
+        buf.put(0x00.toByte())
+        buf.putShort(totalLen.toShort())
+        buf.putShort(0)
+        buf.putShort(0x4000.toShort()) // Don't fragment
+        buf.put(64.toByte()) // TTL
+        buf.put(6.toByte()) // Protocol TCP
+        buf.putShort(0) // Checksum placeholder
+        buf.put(request.dstIp) // Src IP is original Dst IP
+        buf.put(request.srcIp) // Dst IP is original Src IP
+
+        // IP Checksum
+        val ipChecksum = ipv4Checksum(buf.array(), 0, 20)
+        buf.array()[10] = (ipChecksum shr 8).toByte()
+        buf.array()[11] = ipChecksum.toByte()
+
+        // TCP Header (at offset 20)
+        buf.position(20)
+        buf.putShort(request.dstPort.toShort()) // Src port
+        buf.putShort(request.srcPort.toShort()) // Dst port
+        buf.putInt(rstSeq.toInt())
+        buf.putInt(rstAck.toInt())
+        buf.put((5 shl 4).toByte()) // Data offset: 5 32-bit words (20 bytes)
+        buf.put(rstFlags.toByte())
+        buf.putShort(0) // Window size: 0
+        buf.putShort(0) // TCP checksum placeholder
+        buf.putShort(0) // Urgent pointer: 0
+
+        // TCP Checksum with pseudo-header
+        val tcpChecksum = tcpChecksum(request.dstIp, request.srcIp, 20, buf.array(), 20)
+        buf.array()[36] = (tcpChecksum shr 8).toByte()
+        buf.array()[37] = tcpChecksum.toByte()
+
+        return buf.array()
+    }
+
+    private fun tcpChecksum(
+        srcIp: ByteArray,
+        dstIp: ByteArray,
+        tcpLen: Int,
+        packet: ByteArray,
+        tcpOffset: Int
+    ): Int {
+        var sum = 0L
+
+        // IPv4 Pseudo Header:
+        sum += ((srcIp[0].toInt() and 0xFF) shl 8) or (srcIp[1].toInt() and 0xFF)
+        sum += ((srcIp[2].toInt() and 0xFF) shl 8) or (srcIp[3].toInt() and 0xFF)
+        sum += ((dstIp[0].toInt() and 0xFF) shl 8) or (dstIp[1].toInt() and 0xFF)
+        sum += ((dstIp[2].toInt() and 0xFF) shl 8) or (dstIp[3].toInt() and 0xFF)
+        sum += 6 // Protocol 6
+        sum += tcpLen
+
+        var i = tcpOffset
+        val end = tcpOffset + tcpLen
+        while (i < end - 1) {
+            if (i == tcpOffset + 16) { // skip checksum field at offset 16 in TCP header
+                i += 2
+                continue
+            }
+            sum += ((packet[i].toInt() and 0xFF) shl 8) or (packet[i + 1].toInt() and 0xFF)
+            i += 2
+        }
+        if (i < end) {
+            sum += (packet[i].toInt() and 0xFF) shl 8
+        }
+
+        while (sum shr 16 != 0L) {
+            sum = (sum and 0xFFFF) + (sum shr 16)
+        }
+
+        val checksum = (sum.inv() and 0xFFFF).toInt()
+        return if (checksum == 0) 0xFFFF else checksum
     }
 }

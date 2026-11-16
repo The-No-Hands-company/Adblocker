@@ -30,6 +30,7 @@ object AppModule {
         filterEngine: FilterEngine,
         dohClient: DohClient,
         statsRepository: StatsRepository,
-        dnsLogDao: DnsLogDao
-    ): DnsEngine = DnsEngine(filterEngine, dohClient, statsRepository, dnsLogDao)
+        dnsLogDao: DnsLogDao,
+        ipBlocklistEngine: com.tnhc.shield.filter.IpBlocklistEngine
+    ): DnsEngine = DnsEngine(filterEngine, dohClient, statsRepository, dnsLogDao, ipBlocklistEngine)
 }

@@ -38,7 +38,7 @@ class IpBlocklistEngine {
         parseIpv4Cidr("104.24.0.0/14")
     )
 
-    private val staticExactIpv4 = hashSetOf(
+    private val staticExactIpv4Strings = setOf(
         "34.192.122.188", // unityads auction
         "54.88.225.234",  // unityads config
         "52.206.163.4",   // applovin rt
@@ -46,8 +46,15 @@ class IpBlocklistEngine {
         "52.7.202.94"     // vungle ads
     )
 
+    private val staticExactIpv4Ints: Set<Int> = staticExactIpv4Strings.map { ip ->
+        val parts = ip.split('.').map { it.toInt() }
+        (parts[0] shl 24) or (parts[1] shl 16) or (parts[2] shl 8) or parts[3]
+    }.toSet()
+
+    val routedExactIps: Set<String> get() = staticExactIpv4Strings
+
     fun isBlocked(ipAddress: String): Boolean {
-        if (staticExactIpv4.contains(ipAddress)) return true
+        if (staticExactIpv4Strings.contains(ipAddress)) return true
         return try {
             val addr = InetAddress.getByName(ipAddress)
             isBlocked(addr.address)
@@ -59,6 +66,7 @@ class IpBlocklistEngine {
     fun isBlocked(ipBytes: ByteArray): Boolean {
         if (ipBytes.size == 4) {
             val ipInt = ByteBuffer.wrap(ipBytes).int
+            if (staticExactIpv4Ints.contains(ipInt)) return true
             for (cidr in staticIpv4Cidrs) {
                 if (cidr.matches(ipInt)) return true
             }
