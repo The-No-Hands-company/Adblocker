@@ -15,5 +15,7 @@ data class DnsLogEntity(
     val qtype: String = "A",
     val timestamp: Long = System.currentTimeMillis(),
     val isBlocked: Boolean,
-    val ruleMatched: String? = null
+    val ruleMatched: String? = null,
+    val packageName: String? = null,
+    val appName: String? = null
 )

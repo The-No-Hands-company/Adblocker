@@ -79,4 +79,16 @@ Filter categories: `ADS`, `TRACKING`, `MALWARE`, `SOCIAL`, `ANNOYANCES`, `PRIVAC
   - Dual-stack IPv6 interface & DNS route (`fd00::1`) to eliminate IPv6 DNS leaks
   - Dynamic DoH server switching with static bootstrap IP resolver (`BootstrapDns.kt`)
   - Channel-based synchronized TUN writer to prevent file descriptor corruption
-- v2.0: Optional HTTPS MITM proxy for full content filtering (cosmetic filters)
+- v1.5: ✅ Deep App Attribution & Visibility
+  - Per-app DNS Attribution via `ConnectivityManager.getConnectionOwnerUid()` with package/app name chips in Live Query Log
+  - 1-tap "Exclude App" split-tunneling toggle directly from query log rows
+  - Custom DoH endpoint input in Settings (support for NextDNS, ControlD, Pi-hole, AdGuard Home)
+  - Manual "Update All Lists" action in Filters screen with real-time progress bar
+- v1.6: ✅ Cosmetic Collapse & Configuration Portability
+  - Dummy Ad Responder (`DummyAdResponder.kt` with 1x1 transparent GIF89a & empty JSON)
+  - JSON Backup & Restore for Custom Rules, Excluded Apps, and Settings
+- v2.0: ✅ Release Engineering, In-App Auto-Updater & F-Droid Readiness
+  - In-App GitHub Release Update Checker (`UpdateChecker.kt`)
+  - Automated GitHub Actions APK release pipeline on tag push
+  - F-Droid Fastlane metadata structure (`fastlane/metadata/android/en-US/`)
+- Future: Optional HTTPS MITM proxy for full content cosmetic DOM filtering

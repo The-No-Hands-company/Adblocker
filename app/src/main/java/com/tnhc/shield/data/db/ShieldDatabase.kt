@@ -18,7 +18,7 @@ import com.tnhc.shield.data.db.entities.FilterListEntity
         CustomRuleEntity::class,
         DnsLogEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class ShieldDatabase : RoomDatabase() {

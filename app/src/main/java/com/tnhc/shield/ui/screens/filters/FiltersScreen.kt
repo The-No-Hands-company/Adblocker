@@ -58,6 +58,8 @@ fun FiltersScreen(viewModel: MainViewModel = hiltViewModel()) {
 @Composable
 fun FilterListsTab(viewModel: MainViewModel) {
     val lists by viewModel.allFilterLists.collectAsStateWithLifecycle(emptyList())
+    val isUpdating by viewModel.isUpdatingFilters.collectAsStateWithLifecycle()
+    val updateProgress by viewModel.filterUpdateProgress.collectAsStateWithLifecycle()
     var selectedCategory by remember { mutableStateOf<FilterCategory?>(null) }
 
     val filtered = if (selectedCategory == null) lists
@@ -79,8 +81,40 @@ fun FilterListsTab(viewModel: MainViewModel) {
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = { viewModel.refreshFilterLists() }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Update all lists")
+                IconButton(
+                    onClick = { viewModel.updateAllFilters() },
+                    enabled = !isUpdating
+                ) {
+                    if (isUpdating) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Update all lists")
+                    }
+                }
+            }
+        }
+
+        if (isUpdating) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val current = updateProgress?.first ?: 0
+                        val total = updateProgress?.second ?: 1
+                        Text(
+                            "Updating filter lists ($current of $total)...",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        LinearProgressIndicator(
+                            progress = { if (total > 0) current.toFloat() / total.toFloat() else 0f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }

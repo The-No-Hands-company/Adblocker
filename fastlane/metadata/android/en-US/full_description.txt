@@ -1,0 +1,11 @@
+Shield is an open-source, battery-efficient Android ad blocker that stops ads, trackers, and malware system-wide across all apps and games.
+
+Features:
+• Zero root required: Runs locally on your device using Android's local VPN TUN interface.
+• Battery efficient: Intercepts only DNS queries (port 53), allowing regular internet payload traffic to stream at raw hardware speeds without full-proxy battery drain.
+• Zero telemetry & 100% Free: No ads, no telemetry, no paid subscriptions or paywalls.
+• Live Query Log: Real-time traffic inspector with per-app attribution and 1-tap allow/block/exclude controls.
+• Custom Rules: Flexible domain whitelist and blacklist management.
+• Resilient DNS-over-HTTPS: Encrypted DoH with static bootstrap and direct fallback resilience.
+• In-App ad resistance: Sub-millisecond local connection refusal for mobile ad SDKs (Unity Ads, AppLovin, IronSource).
+• Android Quick Settings Tile: 1-tap notification pull-down toggle.

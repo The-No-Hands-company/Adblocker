@@ -153,6 +153,7 @@ fun ActivityTab(viewModel: MainViewModel) {
 @Composable
 fun QueryLogTab(viewModel: MainViewModel) {
     val logs by viewModel.dnsLogs.collectAsStateWithLifecycle()
+    val excludedApps by viewModel.excludedApps.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -172,7 +173,7 @@ fun QueryLogTab(viewModel: MainViewModel) {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "Real-time DNS queries intercepted by Shield",
+                        "Real-time DNS queries with app attribution",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -209,10 +210,13 @@ fun QueryLogTab(viewModel: MainViewModel) {
             }
         } else {
             items(logs, key = { it.id }) { log ->
+                val isExcluded = log.packageName != null && excludedApps.contains(log.packageName)
                 QueryLogRow(
                     log = log,
+                    isAppExcluded = isExcluded,
                     onAllow = { viewModel.addCustomRule(log.domain, isWhitelist = true) },
-                    onBlock = { viewModel.addCustomRule(log.domain, isWhitelist = false) }
+                    onBlock = { viewModel.addCustomRule(log.domain, isWhitelist = false) },
+                    onToggleExcludeApp = { log.packageName?.let { viewModel.toggleAppExcluded(it) } }
                 )
             }
         }
@@ -222,8 +226,10 @@ fun QueryLogTab(viewModel: MainViewModel) {
 @Composable
 fun QueryLogRow(
     log: DnsLogEntity,
+    isAppExcluded: Boolean,
     onAllow: () -> Unit,
-    onBlock: () -> Unit
+    onBlock: () -> Unit,
+    onToggleExcludeApp: () -> Unit
 ) {
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
@@ -238,7 +244,33 @@ fun QueryLogRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (log.appName != null || log.packageName != null) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Android,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                log.appName ?: log.packageName ?: "",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -278,22 +310,41 @@ fun QueryLogRow(
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (log.isBlocked) {
-                    OutlinedButton(
-                        onClick = onAllow,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Text("Allow", style = MaterialTheme.typography.labelSmall, color = ShieldGreen)
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (log.isBlocked) {
+                        OutlinedButton(
+                            onClick = onAllow,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            Text("Allow", style = MaterialTheme.typography.labelSmall, color = ShieldGreen)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onBlock,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            Text("Block", style = MaterialTheme.typography.labelSmall, color = ShieldRed)
+                        }
                     }
-                } else {
+                }
+
+                if (log.packageName != null) {
                     OutlinedButton(
-                        onClick = onBlock,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(32.dp)
+                        onClick = onToggleExcludeApp,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(26.dp)
                     ) {
-                        Text("Block", style = MaterialTheme.typography.labelSmall, color = ShieldRed)
+                        Text(
+                            if (isAppExcluded) "Excluded" else "Exclude App",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isAppExcluded) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

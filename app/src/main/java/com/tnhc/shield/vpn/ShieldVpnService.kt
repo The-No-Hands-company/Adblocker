@@ -49,6 +49,40 @@ class ShieldVpnService : VpnService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var writeChannel: kotlinx.coroutines.channels.Channel<ByteArray>? = null
 
+    private val connectivityManager by lazy { getSystemService(android.net.ConnectivityManager::class.java) }
+    private val appInfoCache = java.util.concurrent.ConcurrentHashMap<Int, Pair<String, String>>()
+
+    private fun resolveAppInfo(protocol: Int, srcIp: ByteArray, srcPort: Int, dstIp: ByteArray, dstPort: Int): Pair<String, String>? {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            try {
+                val srcAddress = java.net.InetAddress.getByAddress(srcIp)
+                val dstAddress = java.net.InetAddress.getByAddress(dstIp)
+                val uid = connectivityManager.getConnectionOwnerUid(
+                    protocol,
+                    java.net.InetSocketAddress(srcAddress, srcPort),
+                    java.net.InetSocketAddress(dstAddress, dstPort)
+                )
+                if (uid > 0 && uid != android.os.Process.INVALID_UID) {
+                    appInfoCache[uid]?.let { return it }
+                    val pkgs = packageManager.getPackagesForUid(uid)
+                    val pkg = pkgs?.firstOrNull()
+                    if (pkg != null) {
+                        val appLabel = try {
+                            val appInfo = packageManager.getApplicationInfo(pkg, 0)
+                            packageManager.getApplicationLabel(appInfo).toString()
+                        } catch (_: Exception) {
+                            pkg
+                        }
+                        val info = Pair(pkg, appLabel)
+                        appInfoCache[uid] = info
+                        return info
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return null
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
@@ -161,7 +195,12 @@ class ShieldVpnService : VpnService() {
             // Only handle DNS (port 53)
             if (ipUdp.dstPort == 53) {
                 val dnsPayload = ipUdp.payload
-                val dnsResponse = dnsEngine.handleDnsQuery(dnsPayload)
+                val appInfo = resolveAppInfo(17, ipUdp.srcIp, ipUdp.srcPort, ipUdp.dstIp, ipUdp.dstPort)
+                val dnsResponse = dnsEngine.handleDnsQuery(
+                    rawQuery = dnsPayload,
+                    packageName = appInfo?.first,
+                    appName = appInfo?.second
+                )
                 return IpPacketParser.buildUdpResponse(ipUdp, dnsResponse)
             }
             // Drop UDP packets directed to blocked ad IP clusters

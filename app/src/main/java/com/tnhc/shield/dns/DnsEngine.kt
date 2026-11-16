@@ -24,7 +24,11 @@ class DnsEngine(
     private val cache = ConcurrentHashMap<String, DnsCacheEntry>()
     private val cacheMaxSize = 2048
 
-    suspend fun handleDnsQuery(rawQuery: ByteArray): ByteArray {
+    suspend fun handleDnsQuery(
+        rawQuery: ByteArray,
+        packageName: String? = null,
+        appName: String? = null
+    ): ByteArray {
         val query = DnsPacketParser.parseQuery(rawQuery) ?: return rawQuery
         val qtypeStr = if (query.isAAAARecord) "AAAA" else "A"
 
@@ -36,7 +40,9 @@ class DnsEngine(
                         domain = query.domain,
                         qtype = qtypeStr,
                         isBlocked = false,
-                        ruleMatched = "Whitelist"
+                        ruleMatched = "Whitelist",
+                        packageName = packageName,
+                        appName = appName
                     )
                 )
             } catch (_: Exception) {}
@@ -52,7 +58,9 @@ class DnsEngine(
                         domain = query.domain,
                         qtype = qtypeStr,
                         isBlocked = true,
-                        ruleMatched = "Blocklist"
+                        ruleMatched = "Blocklist",
+                        packageName = packageName,
+                        appName = appName
                     )
                 )
             } catch (_: Exception) {}
@@ -64,7 +72,9 @@ class DnsEngine(
                 DnsLogEntity(
                     domain = query.domain,
                     qtype = qtypeStr,
-                    isBlocked = false
+                    isBlocked = false,
+                    packageName = packageName,
+                    appName = appName
                 )
             )
         } catch (_: Exception) {}
