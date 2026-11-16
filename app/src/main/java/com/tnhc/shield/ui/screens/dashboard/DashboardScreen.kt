@@ -341,10 +341,10 @@ fun StatCard(
 @Composable
 fun ChartCard(hourlyData: List<HourlyCount>) {
     val hourBuckets = remember(hourlyData) {
-        val nowHour = (System.currentTimeMillis() / 3_600_000L).toInt()
+        val nowHour = System.currentTimeMillis() / 3_600_000L
         val dataMap = hourlyData.associate { it.hour to it.count }
         (0 until 24).map { offset ->
-            val h = nowHour - 23 + offset
+            val h = nowHour - 23L + offset
             dataMap[h] ?: 0
         }
     }
@@ -401,7 +401,7 @@ fun ChartCard(hourlyData: List<HourlyCount>) {
 }
 
 @Composable
-fun DomainRow(domain: String, count: Long) {
+fun DomainRow(domain: String, count: Int) {
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
