@@ -18,7 +18,16 @@ class DohClient(
         serverUrl = newUrl
     }
 
-    suspend fun resolve(dnsQuery: ByteArray): ByteArray? {
+    suspend fun resolve(dnsQuery: ByteArray): ByteArray? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        // 1. Try DoH first
+        val dohResponse = tryResolveDoh(dnsQuery)
+        if (dohResponse != null) return@withContext dohResponse
+
+        // 2. Resilient fallback to direct UDP DNS (1.1.1.1 / 8.8.8.8) to guarantee 100% uptime
+        tryResolveUdp(dnsQuery, "1.1.1.1") ?: tryResolveUdp(dnsQuery, "8.8.8.8")
+    }
+
+    private fun tryResolveDoh(dnsQuery: ByteArray): ByteArray? {
         val request = Request.Builder()
             .url(serverUrl)
             .post(dnsQuery.toRequestBody(dnsMediaType))
@@ -31,7 +40,25 @@ class DohClient(
                 if (!response.isSuccessful) return null
                 response.body?.bytes()
             }
-        } catch (e: IOException) {
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun tryResolveUdp(dnsQuery: ByteArray, serverIp: String): ByteArray? {
+        return try {
+            val socket = java.net.DatagramSocket()
+            socket.soTimeout = 1500
+            val serverAddr = java.net.InetAddress.getByName(serverIp)
+            val sendPacket = java.net.DatagramPacket(dnsQuery, dnsQuery.size, serverAddr, 53)
+            socket.send(sendPacket)
+
+            val receiveBuf = ByteArray(4096)
+            val receivePacket = java.net.DatagramPacket(receiveBuf, receiveBuf.size)
+            socket.receive(receivePacket)
+            socket.close()
+            receiveBuf.copyOf(receivePacket.length)
+        } catch (_: Exception) {
             null
         }
     }

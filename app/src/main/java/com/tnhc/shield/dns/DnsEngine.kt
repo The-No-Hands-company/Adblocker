@@ -56,7 +56,7 @@ class DnsEngine(
                     )
                 )
             } catch (_: Exception) {}
-            return DnsPacketParser.buildNxdomainResponse(rawQuery)
+            return DnsPacketParser.buildBlockedResponse(query, rawQuery)
         }
 
         try {
@@ -79,25 +79,9 @@ class DnsEngine(
             return rebuildResponseWithId(cached.response, query.id)
         }
 
-        val response = withTimeoutOrNull(3000) {
+        val response = withTimeoutOrNull(4000) {
             dohClient.resolve(rawQuery)
-        } ?: return DnsPacketParser.buildNxdomainResponse(rawQuery)
-
-        // Inspect resolved A records against ad IP / CDN blocklist
-        if (ipBlocklistEngine != null && isResponseIpBlocked(response)) {
-            try {
-                stats.recordBlock(query.domain)
-                dnsLogDao?.insert(
-                    DnsLogEntity(
-                        domain = query.domain,
-                        qtype = if (query.isAAAARecord) "AAAA" else "A",
-                        isBlocked = true,
-                        ruleMatched = "Ad IP/CDN Cluster"
-                    )
-                )
-            } catch (_: Exception) {}
-            return DnsPacketParser.buildNxdomainResponse(rawQuery)
-        }
+        } ?: return DnsPacketParser.buildBlockedResponse(query, rawQuery)
 
         // Cache with parsed TTL (default 60s)
         if (cache.size >= cacheMaxSize) evictOldEntries()
@@ -107,58 +91,6 @@ class DnsEngine(
         )
 
         return response
-    }
-
-    private fun isResponseIpBlocked(response: ByteArray): Boolean {
-        val engine = ipBlocklistEngine ?: return false
-        return try {
-            if (response.size < 12) return false
-            val buf = java.nio.ByteBuffer.wrap(response)
-            val anCount = buf.getShort(6).toInt() and 0xFFFF
-            if (anCount == 0) return false
-
-            var pos = 12
-            // Skip QNAME
-            while (pos < response.size && response[pos].toInt() and 0xFF != 0) {
-                val len = response[pos].toInt() and 0xFF
-                if (len and 0xC0 == 0xC0) {
-                    pos += 2
-                    break
-                }
-                pos += len + 1
-            }
-            if (pos < response.size && response[pos].toInt() and 0xFF == 0) pos++
-            pos += 4 // QTYPE + QCLASS
-
-            for (i in 0 until anCount) {
-                if (pos >= response.size) break
-                // Skip NAME
-                if (pos + 2 <= response.size && (response[pos].toInt() and 0xC0) == 0xC0) {
-                    pos += 2
-                } else {
-                    while (pos < response.size && response[pos].toInt() and 0xFF != 0) {
-                        pos += (response[pos].toInt() and 0xFF) + 1
-                    }
-                    if (pos < response.size && response[pos].toInt() and 0xFF == 0) pos++
-                }
-
-                if (pos + 10 > response.size) break
-                val type = buf.getShort(pos).toInt() and 0xFFFF
-                val rdLength = buf.getShort(pos + 8).toInt() and 0xFFFF
-                pos += 10
-
-                if (type == 1 && rdLength == 4 && pos + 4 <= response.size) { // A record (IPv4)
-                    val ipBytes = response.copyOfRange(pos, pos + 4)
-                    if (engine.isBlocked(ipBytes)) {
-                        return true
-                    }
-                }
-                pos += rdLength
-            }
-            false
-        } catch (_: Exception) {
-            false
-        }
     }
 
     private fun rebuildResponseWithId(response: ByteArray, newId: Int): ByteArray {

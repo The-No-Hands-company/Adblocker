@@ -58,4 +58,33 @@ class DnsPacketParserTest {
         // RCODE should be 3 (NXDOMAIN)
         assertEquals(3, response[3].toInt() and 0x0F)
     }
+
+    @Test
+    fun testBuildBlockedResponseSynthesizesNullIp() {
+        // Construct DNS A query
+        val buf = ByteBuffer.allocate(64)
+        buf.putShort(0x4321.toShort())
+        buf.putShort(0x0100.toShort())
+        buf.putShort(1.toShort())
+        buf.putShort(0.toShort()); buf.putShort(0.toShort()); buf.putShort(0.toShort())
+        buf.put(3.toByte()); buf.put("ads".toByteArray())
+        buf.put(3.toByte()); buf.put("com".toByteArray())
+        buf.put(0.toByte())
+        buf.putShort(1.toShort()) // A record
+        buf.putShort(1.toShort())
+        val raw = buf.array().copyOf(buf.position())
+
+        val query = DnsPacketParser.parseQuery(raw)
+        assertNotNull(query)
+
+        val response = DnsPacketParser.buildBlockedResponse(query!!, raw)
+        // RCODE must be 0 (NOERROR)
+        assertEquals(0, response[3].toInt() and 0x0F)
+        // ANCOUNT must be 1
+        val anCount = ((response[6].toInt() and 0xFF) shl 8) or (response[7].toInt() and 0xFF)
+        assertEquals(1, anCount)
+        // Last 4 bytes must be 0.0.0.0
+        val ipBytes = response.copyOfRange(response.size - 4, response.size)
+        assertArrayEquals(byteArrayOf(0, 0, 0, 0), ipBytes)
+    }
 }

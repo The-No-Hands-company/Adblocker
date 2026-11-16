@@ -92,6 +92,46 @@ object DnsPacketParser {
             buildNxdomainResponse(query)
         }
     }
+
+    fun buildBlockedAaaaResponse(query: ByteArray): ByteArray {
+        return try {
+            val qBuf = ByteBuffer.wrap(query)
+            val id = qBuf.short.toInt() and 0xFFFF
+            qBuf.position(12)
+            while (qBuf.hasRemaining()) {
+                val len = qBuf.get().toInt() and 0xFF
+                if (len == 0) break
+                if (len and 0xC0 == 0xC0) { qBuf.get(); break }
+                if (qBuf.remaining() < len) return buildNxdomainResponse(query)
+                qBuf.position(qBuf.position() + len)
+            }
+            if (qBuf.remaining() < 4) return buildNxdomainResponse(query)
+            val qtype = qBuf.short.toInt() and 0xFFFF
+            if (qtype != 28) return buildNxdomainResponse(query)
+
+            val questionSection = query.copyOfRange(12, qBuf.position())
+            val buf = ByteBuffer.allocate(12 + questionSection.size + 28)
+            buf.putShort(id.toShort())
+            buf.putShort(0x8180.toShort())
+            buf.putShort(1); buf.putShort(1); buf.putShort(0); buf.putShort(0)
+            buf.put(questionSection)
+            buf.putShort(0xC00C.toShort())
+            buf.putShort(28); buf.putShort(1)
+            buf.putInt(10); buf.putShort(16)
+            buf.put(ByteArray(16)) // :: null IPv6
+            buf.array()
+        } catch (e: Exception) {
+            buildNxdomainResponse(query)
+        }
+    }
+
+    fun buildBlockedResponse(query: DnsQuery, rawQuery: ByteArray): ByteArray {
+        return when {
+            query.isARecord -> buildBlockedAResponse(rawQuery)
+            query.isAAAARecord -> buildBlockedAaaaResponse(rawQuery)
+            else -> buildNxdomainResponse(rawQuery)
+        }
+    }
 }
 
 data class IpUdpPacket(

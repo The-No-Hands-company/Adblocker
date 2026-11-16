@@ -56,4 +56,21 @@ class FilterEngineTest {
         assertTrue(filterEngine.isBlocked("sub.ad.doubleclick.net"))
         assertFalse(filterEngine.isBlocked("notdoubleclick.net"))
     }
+
+    @Test
+    fun testEssentialInfrastructureNeverBlocked() {
+        val parseResult = FilterListParser.ParseResult(
+            blockedDomains = setOf("unity3d.com", "googleapis.com"),
+            whitelistedDomains = emptySet()
+        )
+        filterEngine.loadRules(listOf(parseResult))
+
+        // Essential game engine / auth domains must remain unblocked for games to start
+        assertFalse(filterEngine.isBlocked("cloud.unity3d.com"))
+        assertFalse(filterEngine.isBlocked("play.googleapis.com"))
+        assertTrue(filterEngine.isWhitelisted("cloud.unity3d.com"))
+
+        // While ad domains under unity3d are still blocked
+        assertTrue(filterEngine.isBlocked("unityads.unity3d.com"))
+    }
 }

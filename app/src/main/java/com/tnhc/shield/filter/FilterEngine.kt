@@ -77,6 +77,39 @@ class FilterEngine {
         "ads.smaato.net"
     )
 
+    // Critical gaming & platform infrastructure that must NEVER be blocked
+    private val essentialInfrastructureWhitelist: Set<String> = setOf(
+        // Unity Engine services (Required for games to start and load assets)
+        "cloud.unity3d.com",
+        "cdp.cloud.unity3d.com",
+        "services.unity3d.com",
+        "identity.unity3d.com",
+        "assetstore.unity3d.com",
+        "license.unity3d.com",
+        "multiplayer.unity3d.com",
+        "core.unity3d.com",
+        "config.uca.cloud.unity3d.com",
+        "api.uca.cloud.unity3d.com",
+        // Unreal / Epic Games services
+        "epicgames.com",
+        "unrealengine.com",
+        "ol.epicgames.com",
+        // Google Play Services, Firebase & Push (In-app purchases, save games, auth)
+        "play.googleapis.com",
+        "play.google.com",
+        "android.clients.google.com",
+        "accounts.google.com",
+        "firebaseinstallations.googleapis.com",
+        "fcm.googleapis.com",
+        "firestore.googleapis.com",
+        "firebaseio.com",
+        // App Stores & Identity
+        "gateway.icloud.com",
+        "appleid.apple.com",
+        "auth.discord.com",
+        "graph.facebook.com"
+    )
+
     // Domain suffix matches: entries like "example.com" block "ads.example.com", "sub.ads.example.com", etc.
     private var blockedSuffix = HashSet<String>(32_000)
 
@@ -101,8 +134,6 @@ class FilterEngine {
         }
 
         // Split into exact and suffix sets
-        // Heuristic: if a domain has 2+ labels and no wildcard, treat as exact
-        // Domains with 1 label (e.g. "com") are suffix rules
         val newBlockedExact = HashSet<String>(newBlocked.size)
         val newBlockedSuffix = HashSet<String>(newBlocked.size / 4)
 
@@ -122,6 +153,13 @@ class FilterEngine {
 
     fun isBlocked(domain: String): Boolean {
         val d = domain.lowercase().trimEnd('.')
+
+        // Essential game & OS infrastructure is never blocked
+        if (essentialInfrastructureWhitelist.contains(d)) return false
+        for (infra in essentialInfrastructureWhitelist) {
+            if (d.endsWith(".$infra")) return false
+        }
+
         lock.read {
             if (userWhitelistedExact.contains(d)) return false
             if (whitelistedExact.contains(d)) return false
@@ -131,7 +169,7 @@ class FilterEngine {
             // Check exact match
             if (blockedExact.contains(d)) return true
 
-            // Check suffix matches: for "ads.sub.example.com" check "sub.example.com", "example.com", "com"
+            // Check suffix matches in blockedExact and blockedSuffix
             var dotIndex = d.indexOf('.')
             while (dotIndex != -1) {
                 val suffix = d.substring(dotIndex + 1)
@@ -146,8 +184,14 @@ class FilterEngine {
 
     fun isWhitelisted(domain: String): Boolean {
         val d = domain.lowercase().trimEnd('.')
+        if (essentialInfrastructureWhitelist.contains(d)) return true
+        for (infra in essentialInfrastructureWhitelist) {
+            if (d.endsWith(".$infra")) return true
+        }
+
         lock.read {
             if (userWhitelistedExact.contains(d)) return true
+            if (whitelistedExact.contains(d)) return true
             if (whitelistedExact.contains(d)) return true
             var dotIndex = d.indexOf('.')
             while (dotIndex != -1) {

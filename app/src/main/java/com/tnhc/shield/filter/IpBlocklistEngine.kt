@@ -14,29 +14,9 @@ class IpBlocklistEngine {
         fun matches(ip: Int): Boolean = (ip and mask) == network
     }
 
-    private val staticIpv4Cidrs: List<Ipv4Cidr> = listOf(
-        // Unity Ads & Video Delivery Edge Clusters (Akamai / Fastly / Dedicated CDN ranges)
-        parseIpv4Cidr("185.199.108.0/22"),
-        parseIpv4Cidr("192.241.128.0/19"),
-        parseIpv4Cidr("162.243.0.0/18"),
-        parseIpv4Cidr("151.101.0.0/16"),
-
-        // AppLovin / MAX Edge Ad Delivery Clusters
-        parseIpv4Cidr("54.240.128.0/18"),
-        parseIpv4Cidr("52.216.0.0/15"),
-        parseIpv4Cidr("34.224.0.0/12"),
-        parseIpv4Cidr("35.160.0.0/13"),
-
-        // IronSource / LevelPlay Impression & Auction Clusters
-        parseIpv4Cidr("52.84.0.0/15"),
-        parseIpv4Cidr("13.32.0.0/15"),
-        parseIpv4Cidr("18.64.0.0/14"),
-        parseIpv4Cidr("65.8.0.0/15"),
-
-        // InMobi / Vungle Ad Gateways
-        parseIpv4Cidr("104.16.0.0/13"),
-        parseIpv4Cidr("104.24.0.0/14")
-    )
+    // Do NOT include shared Anycast CDN ranges (Fastly, Cloudflare, AWS CloudFront)
+    // as doing so would block legitimate apps and games sharing those cloud networks.
+    private val staticIpv4Cidrs: List<Ipv4Cidr> = emptyList()
 
     private val staticExactIpv4Strings = setOf(
         "34.192.122.188", // unityads auction
